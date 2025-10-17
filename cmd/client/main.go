@@ -27,10 +27,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	queueName := fmt.Sprintf("%v.%v",routing.PauseKey, username)
+	queueName := fmt.Sprintf("%v.%v", routing.PauseKey, username)
 	_, _, err = pubsub.DeclareAndBind(connection, routing.ExchangePerilDirect, queueName, routing.PauseKey, pubsub.Transient)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	gamestate := gamelogic.NewGameState(username)
+
+	for {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			break
+		}
+		err := gamestate.CommandSpawn(words)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// wait for ctrl+c
@@ -39,4 +52,4 @@ func main() {
 	<-signalChan
 	fmt.Println("\nRabbitMQ connection closed.")
 
-}	
+}
