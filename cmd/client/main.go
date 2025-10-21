@@ -40,10 +40,31 @@ func main() {
 		if len(words) == 0 {
 			break
 		}
-		err := gamestate.CommandSpawn(words)
-		if err != nil {
-			log.Fatal(err)
+
+		if words[0] == "spawn" {
+			err := gamestate.CommandSpawn(words)
+			if err != nil {
+				log.Fatal(err)
+			}
+		} else if words[0] == "move" {
+			armyMove, err := gamestate.CommandMove(words)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("move %v %v", armyMove.ToLocation, armyMove.Units)
+		} else if words[0] == "status" {
+			gamestate.CommandStatus()
+		} else if words[0] == "help" {
+			gamelogic.PrintClientHelp()
+		} else if words[0] == "spam" {
+			fmt.Println("Spamming not allowed yet!")
+		} else if words[0] == "quit" {
+			gamelogic.PrintQuit()
+			break
+		} else {
+			fmt.Println("Can't understand the command")
 		}
+		
 	}
 
 	// wait for ctrl+c
