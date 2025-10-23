@@ -27,6 +27,12 @@ func main() {
 		log.Fatalf("Couldn't create channel: %v", err)
 	}
 
+	routingKey := fmt.Sprintf("%v.*", routing.GameLogSlug)
+	_, _, err = pubsub.DeclareAndBind(connection, routing.ExchangePerilTopic, "game_logs", routingKey, pubsub.Durable)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	gamelogic.PrintServerHelp()
 
 	for {
