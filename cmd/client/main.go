@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 
@@ -12,28 +11,36 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	return func(ps routing.PlayingState) {
+		defer fmt.Print("> ")
+		gs.HandlePause(ps)
+	}
+}
+
 func main() {
 	fmt.Println("Starting Peril client...")
 	connectionAddress := "amqp://guest:guest@localhost:5672/"
 	connection, err := amqp.Dial(connectionAddress)
 	if err != nil {
-		log.Fatalf("could not connect to RabbitMQ: %v", err)
+		fmt.Printf("could not connect to RabbitMQ: %v", err)
 	}
 	defer connection.Close()
 	fmt.Println("Peril client connected to RabbitMQ!")
 
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
-		log.Fatal(err)
+		fmt.Print(err)
 	}
 
 	queueName := fmt.Sprintf("%v.%v", routing.PauseKey, username)
-	_, _, err = pubsub.DeclareAndBind(connection, routing.ExchangePerilDirect, queueName, routing.PauseKey, pubsub.Transient)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	gamestate := gamelogic.NewGameState(username)
+
+	err = pubsub.SubscribeJSON(connection, string(routing.ExchangePerilDirect), queueName, string(routing.PauseKey), pubsub.Transient, handlerPause(gamestate))
+	if err != nil {
+		fmt.Print(err)
+	}
 
 	for {
 		words := gamelogic.GetInput()
@@ -44,12 +51,12 @@ func main() {
 		if words[0] == "spawn" {
 			err := gamestate.CommandSpawn(words)
 			if err != nil {
-				log.Fatal(err)
+				fmt.Print(err)
 			}
 		} else if words[0] == "move" {
 			armyMove, err := gamestate.CommandMove(words)
 			if err != nil {
-				log.Fatal(err)
+				fmt.Print(err)
 			}
 			fmt.Printf("move %v %v", armyMove.ToLocation, armyMove.Units)
 		} else if words[0] == "status" {
@@ -64,7 +71,7 @@ func main() {
 		} else {
 			fmt.Println("Can't understand the command")
 		}
-		
+
 	}
 
 	// wait for ctrl+c
