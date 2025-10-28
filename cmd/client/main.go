@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
-
+	"log"	
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
@@ -20,64 +18,65 @@ func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
 
 func main() {
 	fmt.Println("Starting Peril client...")
-	connectionAddress := "amqp://guest:guest@localhost:5672/"
-	connection, err := amqp.Dial(connectionAddress)
+	const rabbitConnString = "amqp://guest:guest@localhost:5672/"
+
+	conn, err := amqp.Dial(rabbitConnString)
 	if err != nil {
-		fmt.Printf("could not connect to RabbitMQ: %v", err)
+		log.Fatalf("could not connect to RabbitMQ: %v", err)
 	}
-	defer connection.Close()
-	fmt.Println("Peril client connected to RabbitMQ!")
+	defer conn.Close()
+	fmt.Println("Peril game client connected to RabbitMQ!")
 
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
-		fmt.Print(err)
+		log.Fatalf("could not get username: %v", err)
 	}
+	gs := gamelogic.NewGameState(username)
 
-	queueName := fmt.Sprintf("%v.%v", routing.PauseKey, username)
-
-	gamestate := gamelogic.NewGameState(username)
-
-	err = pubsub.SubscribeJSON(connection, string(routing.ExchangePerilDirect), queueName, string(routing.PauseKey), pubsub.Transient, handlerPause(gamestate))
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilDirect,
+		routing.PauseKey+"."+gs.GetUsername(),
+		routing.PauseKey,
+		pubsub.SimpleQueueTransient,
+		handlerPause(gs),
+	)
 	if err != nil {
-		fmt.Print(err)
+		log.Fatalf("could not subscribe to pause: %v", err)
 	}
 
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
-			break
+			continue
 		}
+		switch words[0] {
+		case "move":
+			_, err := gs.CommandMove(words)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
 
-		if words[0] == "spawn" {
-			err := gamestate.CommandSpawn(words)
+			// TODO: publish the move
+		case "spawn":
+			err = gs.CommandSpawn(words)
 			if err != nil {
-				fmt.Print(err)
+				fmt.Println(err)
+				continue
 			}
-		} else if words[0] == "move" {
-			armyMove, err := gamestate.CommandMove(words)
-			if err != nil {
-				fmt.Print(err)
-			}
-			fmt.Printf("move %v %v", armyMove.ToLocation, armyMove.Units)
-		} else if words[0] == "status" {
-			gamestate.CommandStatus()
-		} else if words[0] == "help" {
+		case "status":
+			gs.CommandStatus()
+		case "help":
 			gamelogic.PrintClientHelp()
-		} else if words[0] == "spam" {
+		case "spam":
+			// TODO: publish n malicious logs
 			fmt.Println("Spamming not allowed yet!")
-		} else if words[0] == "quit" {
+		case "quit":
 			gamelogic.PrintQuit()
-			break
-		} else {
-			fmt.Println("Can't understand the command")
+			return
+		default:
+			fmt.Println("unknown command")
 		}
-
 	}
-
-	// wait for ctrl+c
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	fmt.Println("\nRabbitMQ connection closed.")
-
 }
