@@ -45,6 +45,19 @@ func main() {
 		log.Fatalf("could not subscribe to pause: %v", err)
 	}
 
+	queueName := "army_moves." + username
+	channel, queue, err = pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, queueName, "army_moves.*", pubsub.SimpleQueueTransient)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = pubsub.SubscribeJSON(conn, string(routing.ExchangePerilTopic), queueName, "army_moves.*", pubsub.SimpleQueueTransient, gs.HandleMove())
+	if err != nil {
+		log.Fatalf("could not subscribe to pause: %v", err)
+	}
+	fmt.Println(">")
+
+
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
